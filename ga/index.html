@@ -168,7 +168,7 @@
             
             <!-- Asset Chart -->
             <div class="glass-card rounded-2xl p-6">
-                <h2 class="text-sm font-bold mb-2 text-center text-gray-600">자산 구성 비율</h2>
+                <h2 class="text-sm font-bold mb-2 text-center text-gray-600">자산 및 대출 현황</h2>
                 <div class="relative h-48 w-full flex justify-center items-center">
                      <canvas id="assetChart"></canvas>
                 </div>
@@ -432,11 +432,12 @@
         
         document.getElementById('total-net-worth').textContent = formatCurrency(netWorth) + ' 원';
 
-        renderChart(cash, invest, pension);
+        // 렌더 차트 함수에 대출 잔액(loanBal)도 전달
+        renderChart(cash, invest, pension, loanBal);
     };
 
-    // 도넛 차트 렌더링
-    const renderChart = (cash, invest, pension) => {
+    // 막대 차트 렌더링 (마이너스 값 및 대출 직관적 표시)
+    const renderChart = (cash, invest, pension, loanBal) => {
         const ctx = document.getElementById('assetChart');
         if(!ctx) return;
 
@@ -444,36 +445,61 @@
             appState.chartInstance.destroy();
         }
 
-        // 데이터가 아예 없으면 빈 차트로 보이지 않도록 방어 로직
-        if(cash === 0 && invest === 0 && pension === 0) {
+        // 자산은 입력된 값 그대로(마이너스 가능), 대출 잔액은 음수로 표현
+        const rawData = [cash, invest, pension, -loanBal];
+
+        // 데이터가 모두 0이면 빈 차트로 보이지 않도록 방어 로직
+        if(cash === 0 && invest === 0 && pension === 0 && loanBal === 0) {
              appState.chartInstance = new Chart(ctx, {
-                type: 'doughnut',
+                type: 'bar',
                 data: {
-                    labels: ['데이터 없음'],
-                    datasets: [{ data: [1], backgroundColor: ['#e5e7eb'], borderWidth: 0 }]
+                    labels: ['현금/예적금', '투자자산', '퇴직연금', '대출'],
+                    datasets: [{ data: [0, 0, 0, 0] }]
                 },
-                options: { plugins: { tooltip: { enabled: false }, legend: { display: false } }, cutout: '70%' }
+                options: { plugins: { tooltip: { enabled: false }, legend: { display: false } }, scales: { y: { beginAtZero: true } } }
             });
             return;
         }
 
         appState.chartInstance = new Chart(ctx, {
-            type: 'doughnut',
+            type: 'bar',
             data: {
-                labels: ['현금/예적금', '투자자산', '퇴직연금'],
+                labels: ['현금/예적금', '투자자산', '퇴직연금', '대출'],
                 datasets: [{
-                    data: [cash, invest, pension],
-                    backgroundColor: ['#22c55e', '#3b82f6', '#a855f7'],
-                    borderWidth: 2,
-                    borderColor: '#ffffff'
+                    label: '금액',
+                    data: rawData, 
+                    // 현금(초록), 주식(파랑), 연금(보라), 대출(빨강)
+                    backgroundColor: ['#22c55e', '#3b82f6', '#a855f7', '#ef4444'],
+                    borderRadius: 4
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                cutout: '65%',
                 plugins: {
-                    legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } }
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return formatCurrency(context.raw) + ' 원';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        grid: {
+                            // 0원 기준선을 진하게 표시하여 직관성 강화
+                            color: (context) => context.tick.value === 0 ? '#374151' : '#e5e7eb',
+                            lineWidth: (context) => context.tick.value === 0 ? 2 : 1
+                        },
+                        ticks: {
+                            // Y축 숫자에 쉼표(,) 추가
+                            callback: function(value) {
+                                return value.toLocaleString('ko-KR');
+                            }
+                        }
+                    }
                 }
             }
         });
