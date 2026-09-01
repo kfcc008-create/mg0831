@@ -3,248 +3,361 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>재테크 고수의 스마트 자산 대시보드</title>
+    <title>스마트 자산 관리 대시보드</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- 엑셀 파일 처리를 위한 SheetJS -->
+    <!-- SheetJS (Excel 파싱) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- FontAwesome (아이콘) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js (차트) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700&display=swap');
-        body {
-            font-family: 'Pretendard', sans-serif;
-            background-color: #f3f4f6;
-        }
-        /* 스크롤바 숨기기 (깔끔한 UI 유지) */
-        .hide-scrollbar::-webkit-scrollbar {
-            display: none;
-        }
-        .hide-scrollbar {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-        }
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
         .glass-card {
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         }
+        /* Custom Scrollbar for tables */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+        
+        /* 토스트 알림 스타일 */
+        #toast {
+            visibility: hidden; min-width: 250px; background-color: #333; color: #fff; text-align: center;
+            border-radius: 8px; padding: 16px; position: fixed; z-index: 50; left: 50%; bottom: 30px;
+            transform: translateX(-50%); opacity: 0; transition: opacity 0.3s, visibility 0.3s;
+        }
+        #toast.show { visibility: visible; opacity: 1; }
     </style>
 </head>
-<body class="text-gray-800 antialiased">
+<body class="text-gray-800">
 
-<div id="toast" class="fixed top-5 right-5 transform transition-all duration-300 translate-x-full opacity-0 z-50 flex items-center bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg">
-    <i class="fas fa-info-circle mr-3"></i>
-    <span id="toast-message">메시지</span>
-</div>
+<div id="toast">메시지</div>
 
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-    
-    <header class="mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+<div class="container mx-auto p-4 max-w-7xl">
+    <!-- Header -->
+    <header class="flex flex-col md:flex-row justify-between items-center mb-8 bg-indigo-600 text-white p-6 rounded-2xl shadow-lg">
         <div>
-            <h1 class="text-3xl font-bold text-gray-900 tracking-tight">나의 자산 대시보드</h1>
-            <p class="text-gray-500 mt-1">월 1회 관리로 완성하는 완벽한 재테크 현황판</p>
+            <h1 class="text-2xl md:text-3xl font-bold"><i class="fas fa-wallet mr-2"></i> 스마트 자산 대시보드</h1>
+            <p class="text-indigo-200 mt-1">월 1회 관리로 한눈에 보는 나의 총 자산</p>
         </div>
-        <div class="text-right w-full md:w-auto">
-            <p class="text-sm font-medium text-gray-500 mb-1">현재 순자산 (총자산 - 대출금)</p>
-            <div class="text-4xl font-extrabold text-indigo-600 tracking-tight" id="net-worth-display">
-                0 <span class="text-2xl text-gray-600 font-bold">원</span>
-            </div>
+        <div class="mt-4 md:mt-0 text-center md:text-right">
+            <p class="text-sm text-indigo-200">총 순자산 (자산 - 대출)</p>
+            <p class="text-3xl md:text-4xl font-extrabold" id="total-net-worth">0 원</p>
         </div>
     </header>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+    <!-- Top Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <!-- 현금성 자산 -->
+        <div class="glass-card rounded-2xl p-6 flex flex-col justify-between border-l-4 border-green-500">
+            <div>
+                <div class="flex items-center text-gray-500 mb-2 font-medium">
+                    <i class="fas fa-money-bill-wave text-green-500 mr-2"></i> 현금/예적금
+                </div>
+                <div class="text-2xl font-bold" id="summary-cash">0 원</div>
+            </div>
+        </div>
         
-        <div class="glass-card rounded-2xl p-6 lg:col-span-1 flex flex-col justify-center items-center">
-            <h2 class="text-lg font-bold text-gray-800 mb-4 w-full text-left">포트폴리오 비중</h2>
-            <div class="w-full h-64 relative">
-                <canvas id="assetChart"></canvas>
+        <!-- 투자 자산 -->
+        <div class="glass-card rounded-2xl p-6 flex flex-col justify-between border-l-4 border-blue-500">
+            <div>
+                <div class="flex items-center text-gray-500 mb-2 font-medium">
+                    <i class="fas fa-chart-line text-blue-500 mr-2"></i> 주식/투자
+                </div>
+                <div class="text-2xl font-bold" id="summary-invest">0 원</div>
             </div>
         </div>
 
-        <div class="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div class="glass-card rounded-2xl p-6 flex flex-col justify-between border-l-4 border-blue-500">
-                <div>
-                    <div class="flex items-center text-gray-500 mb-2">
-                        <i class="fas fa-piggy-bank mr-2"></i> 예적금 및 현금
+        <!-- 연금 자산 -->
+        <div class="glass-card rounded-2xl p-6 flex flex-col justify-between border-l-4 border-purple-500">
+            <div>
+                <div class="flex items-center text-gray-500 mb-2 font-medium">
+                    <i class="fas fa-piggy-bank text-purple-500 mr-2"></i> 퇴직연금 (IRP 등)
+                </div>
+                <div class="text-2xl font-bold" id="summary-pension">0 원</div>
+            </div>
+        </div>
+
+        <!-- 대출 잔액 -->
+        <div class="glass-card rounded-2xl p-6 flex flex-col justify-between border-l-4 border-red-500 bg-red-50">
+            <div>
+                <div class="flex items-center text-gray-700 mb-2 font-medium">
+                    <i class="fas fa-home text-red-500 mr-2"></i> 대출 잔액 (자동계산)
+                </div>
+                <div class="text-2xl font-bold text-red-600" id="summary-loan">0 원</div>
+            </div>
+            <div>
+                <div class="mt-2 text-xs text-gray-400" id="loan-info-text">잔여 개월 수 계산 중...</div>
+                <div class="mt-2 pt-2 border-t border-red-200 text-sm font-bold text-gray-700" id="loan-monthly-payment">예상 월 상환액: 계산 중...</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        
+        <!-- Left Column: Asset Inputs & Loan Input -->
+        <div class="lg:col-span-1 flex flex-col gap-6">
+            
+            <!-- Asset Input Card -->
+            <div class="glass-card rounded-2xl p-6">
+                <h2 class="text-lg font-bold mb-4 border-b pb-2"><i class="fas fa-edit mr-2"></i> 자산 현황 업데이트 (월 1회)</h2>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">현금 및 예적금 총액</label>
+                        <div class="relative">
+                            <input type="number" id="input-cash" class="w-full pl-3 pr-10 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="0">
+                            <span class="absolute right-3 top-2 text-gray-500">원</span>
+                        </div>
                     </div>
-                    <div class="text-2xl font-bold text-gray-900" id="summary-savings">0 원</div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">주식 계좌 평가금액</label>
+                        <div class="relative">
+                            <input type="number" id="input-invest" class="w-full pl-3 pr-10 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="0">
+                            <span class="absolute right-3 top-2 text-gray-500">원</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">퇴직연금(IRP/DC) 평가액</label>
+                        <div class="relative">
+                            <input type="number" id="input-pension" class="w-full pl-3 pr-10 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="0">
+                            <span class="absolute right-3 top-2 text-gray-500">원</span>
+                        </div>
+                    </div>
+                    <button onclick="saveAssets()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition duration-200 mt-2">
+                        자산 저장 및 갱신
+                    </button>
+                </div>
+            </div>
+
+            <!-- Loan Config Card -->
+            <div class="glass-card rounded-2xl p-6 border border-red-100">
+                <h2 class="text-lg font-bold mb-4 border-b pb-2 text-red-600"><i class="fas fa-calculator mr-2"></i> 대출 자동 계산 설정</h2>
+                <p class="text-xs text-gray-500 mb-4">최초 실행 정보만 입력해두면 매월 잔금이 자동 계산됩니다. (원리금균등상환 기준)</p>
+                
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 mb-1">최초 대출 원금</label>
+                        <input type="number" id="loan-principal" class="w-full p-2 text-sm border rounded-lg" placeholder="예: 100000000">
+                    </div>
+                    <div class="flex gap-2">
+                        <div class="w-1/2">
+                            <label class="block text-xs font-medium text-gray-700 mb-1">연 이자율 (%)</label>
+                            <input type="number" id="loan-rate" step="0.1" class="w-full p-2 text-sm border rounded-lg" placeholder="예: 4.5">
+                        </div>
+                        <div class="w-1/2">
+                            <label class="block text-xs font-medium text-gray-700 mb-1">대출 기간 (개월)</label>
+                            <input type="number" id="loan-months" class="w-full p-2 text-sm border rounded-lg" placeholder="예: 360 (30년)">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 mb-1">대출 실행 연월</label>
+                        <input type="month" id="loan-start" class="w-full p-2 text-sm border rounded-lg">
+                    </div>
+                    <button onclick="saveLoanConfig()" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition duration-200 text-sm mt-2">
+                        대출 정보 저장
+                    </button>
                 </div>
             </div>
             
-            <div class="glass-card rounded-2xl p-6 flex flex-col justify-between border-l-4 border-red-500">
-                <div>
-                    <div class="flex items-center text-gray-500 mb-2">
-                        <i class="fas fa-chart-line mr-2"></i> 주식 평가금액
-                    </div>
-                    <div class="text-2xl font-bold text-gray-900" id="summary-stocks">0 원</div>
+            <!-- Asset Chart -->
+            <div class="glass-card rounded-2xl p-6">
+                <h2 class="text-sm font-bold mb-2 text-center text-gray-600">자산 구성 비율</h2>
+                <div class="relative h-48 w-full flex justify-center items-center">
+                     <canvas id="assetChart"></canvas>
                 </div>
             </div>
 
-            <div class="glass-card rounded-2xl p-6 flex flex-col justify-between border-l-4 border-green-500">
-                <div>
-                    <div class="flex items-center text-gray-500 mb-2">
-                        <i class="fas fa-seedling mr-2"></i> 퇴직연금 (IRP 등)
-                    </div>
-                    <div class="text-2xl font-bold text-gray-900" id="summary-pension">0 원</div>
-                </div>
-            </div>
-
-            <div class="glass-card rounded-2xl p-6 flex flex-col justify-between border-l-4 border-gray-700 bg-gray-50">
-                <div>
-                    <div class="flex items-center text-gray-700 mb-2 font-medium">
-                        <i class="fas fa-home mr-2"></i> 대출 잔액 (자동계산)
-                    </div>
-                    <div class="text-2xl font-bold text-red-600" id="summary-loan">0 원</div>
-                </div>
-                <div>
-                    <div class="mt-2 text-xs text-gray-400" id="loan-info-text">잔여 개월 수 계산 중...</div>
-                    <div class="mt-2 pt-2 border-t border-gray-200 text-sm font-bold text-gray-700" id="loan-monthly-payment">예상 월 상환액: 계산 중...</div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        
-        <!-- 월간 자산 업데이트 폼 -->
-        <div class="glass-card rounded-2xl p-6">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-xl font-bold text-gray-900">월간 자산 업데이트</h2>
-                <button onclick="saveAssets()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors">
-                    저장하기
-                </button>
-            </div>
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">예적금 및 현금 (원)</label>
-                    <input type="number" id="input-savings" class="w-full border-gray-300 rounded-lg shadow-sm p-3 border focus:ring-indigo-500 focus:border-indigo-500" placeholder="0">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">주식 평가금액 (원)</label>
-                    <input type="number" id="input-stocks" class="w-full border-gray-300 rounded-lg shadow-sm p-3 border focus:ring-indigo-500 focus:border-indigo-500" placeholder="0">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">퇴직연금 평가금액 (원)</label>
-                    <input type="number" id="input-pension" class="w-full border-gray-300 rounded-lg shadow-sm p-3 border focus:ring-indigo-500 focus:border-indigo-500" placeholder="0">
-                </div>
-            </div>
         </div>
 
-        <!-- 자동 계산 대출 설정 폼 -->
-        <div class="glass-card rounded-2xl p-6">
-             <div class="flex justify-between items-center mb-6">
-                <h2 class="text-xl font-bold text-gray-900">대출 현황 (원리금균등상환 기준)</h2>
-                <button onclick="saveLoan()" class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors">
-                    설정 저장
-                </button>
-            </div>
-            <p class="text-xs text-gray-500 mb-4">* 한 번만 입력해두면 매월 잔액이 자동 계산되어 차감됩니다.</p>
-            <div class="space-y-4">
+        <!-- Right Column: Excel Ledger -->
+        <div class="lg:col-span-2 glass-card rounded-2xl p-6 flex flex-col h-full min-h-[600px]">
+            <div class="flex justify-between items-center mb-4 border-b pb-4">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">최초 대출 원금 (원)</label>
-                    <input type="number" id="input-loan-principal" class="w-full border-gray-300 rounded-lg shadow-sm p-3 border focus:ring-indigo-500 focus:border-indigo-500" placeholder="0">
+                    <h2 class="text-xl font-bold"><i class="fas fa-file-excel text-green-600 mr-2"></i> 이번 달 생활비 내역</h2>
+                    <p class="text-sm text-gray-500 mt-1">카드사 엑셀 내역 등을 업로드하여 관리하세요. (날짜, 분류, 내용, 금액 열 포함)</p>
                 </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">연 이자율 (%)</label>
-                        <input type="number" step="0.01" id="input-loan-rate" class="w-full border-gray-300 rounded-lg shadow-sm p-3 border focus:ring-indigo-500 focus:border-indigo-500" placeholder="4.5">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">대출 기간 (개월)</label>
-                        <input type="number" id="input-loan-months" class="w-full border-gray-300 rounded-lg shadow-sm p-3 border focus:ring-indigo-500 focus:border-indigo-500" placeholder="120">
-                    </div>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">대출 실행년월 (YYYY-MM)</label>
-                    <input type="month" id="input-loan-start" class="w-full border-gray-300 rounded-lg shadow-sm p-3 border focus:ring-indigo-500 focus:border-indigo-500">
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="glass-card rounded-2xl p-6">
-        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-            <div>
-                <h2 class="text-xl font-bold text-gray-900">가계부 (생활비 지출 내역)</h2>
-                <p class="text-sm text-gray-500 mt-1">엑셀 파일을 업로드하면 이번 달 총 생활비가 자동 계산됩니다. (권장 열: 날짜, 분류, 내용, 금액)</p>
-            </div>
-            <div class="flex items-center gap-3 w-full md:w-auto">
-                <label for="excel-upload" class="cursor-pointer bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center w-full md:w-auto">
-                    <i class="fas fa-file-excel mr-2"></i> 엑셀 업로드
+                
+                <!-- 엑셀 업로드 버튼 숨기고 라벨로 디자인 연동 -->
+                <input type="file" id="excel-upload" class="hidden" accept=".xlsx, .xls" onchange="handleExcelUpload(event)">
+                <label for="excel-upload" class="cursor-pointer bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-lg shadow transition duration-200 flex items-center text-sm font-medium">
+                    <i class="fas fa-upload mr-2"></i> 엑셀 파일 불러오기
                 </label>
-                <input type="file" id="excel-upload" accept=".xlsx, .xls, .csv" class="hidden" onchange="handleExcelUpload(event)">
+            </div>
+
+            <!-- 요약 영역 -->
+            <div class="flex gap-4 mb-4 bg-gray-50 p-4 rounded-lg border">
+                <div class="flex-1">
+                    <p class="text-xs text-gray-500">총 지출 건수</p>
+                    <p class="text-lg font-bold" id="expense-count">0 건</p>
+                </div>
+                <div class="flex-1 border-l pl-4">
+                    <p class="text-xs text-gray-500">총 지출 금액</p>
+                    <p class="text-xl font-bold text-red-500" id="expense-total">0 원</p>
+                </div>
+            </div>
+
+            <!-- 테이블 영역 -->
+            <div class="flex-1 overflow-auto rounded-lg border border-gray-200">
+                <table class="min-w-full text-sm text-left">
+                    <thead class="bg-gray-100 text-gray-600 sticky top-0 shadow-sm">
+                        <tr>
+                            <th class="px-4 py-3 font-semibold">날짜</th>
+                            <th class="px-4 py-3 font-semibold">분류</th>
+                            <th class="px-4 py-3 font-semibold">내용</th>
+                            <th class="px-4 py-3 font-semibold text-right">금액</th>
+                        </tr>
+                    </thead>
+                    <tbody id="expense-table-body" class="divide-y divide-gray-200 bg-white">
+                        <tr>
+                            <td colspan="4" class="px-4 py-10 text-center text-gray-400">
+                                <i class="fas fa-inbox text-3xl mb-2"></i><br>
+                                엑셀 파일을 업로드하면 내역이 표시됩니다.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
-
-        <!-- 생활비 요약 -->
-        <div class="bg-gray-50 rounded-xl p-4 mb-6 flex justify-between items-center border border-gray-100">
-            <span class="text-gray-600 font-medium">합계 지출액</span>
-            <span class="text-2xl font-bold text-red-500" id="total-expense-display">0 원</span>
-        </div>
-
-        <!-- 데이터 테이블 -->
-        <div class="overflow-x-auto bg-white rounded-lg border border-gray-200 hide-scrollbar" style="max-height: 400px;">
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50 sticky top-0">
-                    <tr>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">날짜</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">분류</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">내용</th>
-                        <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">금액</th>
-                    </tr>
-                </thead>
-                <tbody id="expense-table-body" class="bg-white divide-y divide-gray-200">
-                    <!-- 데이터가 여기에 렌더링됩니다. -->
-                    <tr>
-                        <td colspan="4" class="px-6 py-10 text-center text-gray-400">
-                            <i class="fas fa-inbox text-3xl mb-2"></i><br>
-                            엑셀 파일을 업로드하여 내역을 확인하세요.
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+        
     </div>
 </div>
 
 <script>
-    // 데이터 상태 관리
+    // 전역 상태 관리
     let appState = {
         assets: {
-            savings: 15000000,
-            stocks: 25000000,
-            pension: 10000000
+            cash: 0,
+            invest: 0,
+            pension: 0
         },
         loan: {
-            principal: 30000000,
-            rate: 4.5,
-            months: 120,
-            startDate: '2023-01'
+            principal: 0,
+            rate: 0,
+            months: 0,
+            startDate: ''
         },
         currentLoanBalance: 0,
-        expenses: [] // 엑셀에서 파싱된 가계부 데이터
+        expenses: [],
+        chartInstance: null
     };
 
-    let assetChartInstance = null;
-
-    // 포맷팅 헬퍼 함수
+    // 포맷팅 헬퍼 함수 (숫자 -> 원화 표기)
     const formatCurrency = (value) => {
         return Math.round(value).toLocaleString('ko-KR');
     };
 
-    // 알림 메시지 띄우기 (alert 대체)
-    const showToast = (message) => {
-        const toast = document.getElementById('toast');
-        const toastMsg = document.getElementById('toast-message');
-        toastMsg.textContent = message;
+    // 엑셀 날짜 변환 헬퍼 함수 (Excel Serial Date / String -> YYYY/MM/DD)
+    const formatExcelDate = (excelDate) => {
+        if (!excelDate) return '-';
         
-        toast.classList.remove('translate-x-full', 'opacity-0');
-        setTimeout(() => {
-            toast.classList.add('translate-x-full', 'opacity-0');
-        }, 3000);
+        // 1. 문자열인 경우 (예: "2024-05-20", "2024.05.20", "2024/05/20")
+        if (typeof excelDate === 'string') {
+             // 구분자를 '/'로 통일
+             const parsedStrDate = excelDate.replace(/[-.]/g, '/');
+             
+             // YYYY/MM/DD 형태인지 검사
+             if (/^\d{4}\/\d{1,2}\/\d{1,2}/.test(parsedStrDate)) {
+                 const parts = parsedStrDate.split(' ')[0].split('/'); // 시간 부분 제거
+                 if (parts.length >= 3) {
+                     const y = parts[0];
+                     const m = parts[1].padStart(2, '0');
+                     const d = parts[2].padStart(2, '0');
+                     return `${y}/${m}/${d}`;
+                 }
+             }
+             // 파싱할 수 없는 문자열 형태라면 그대로 반환
+             return excelDate; 
+        }
+
+        // 2. 숫자인 경우 (Excel Serial Number)
+        if (typeof excelDate === 'number') {
+            // 엑셀 기준일(1900-01-01)을 JS(1899-12-30)에 맞추어 변환 (오프셋 25569)
+            // 86400 * 1000 = 1일의 밀리초
+            const jsDate = new Date((excelDate - 25569) * 86400 * 1000);
+            
+            // Timezone offset 보정 (UTC로 계산되므로 로컬 시간에 맞춰줌)
+            const timezoneOffset = jsDate.getTimezoneOffset() * 60 * 1000;
+            const correctedDate = new Date(jsDate.getTime() + timezoneOffset);
+
+            const year = correctedDate.getFullYear();
+            const month = String(correctedDate.getMonth() + 1).padStart(2, '0');
+            const day = String(correctedDate.getDate()).padStart(2, '0');
+            
+            // 날짜 계산 실패 시 (예: 빈칸이 0으로 들어온 경우)
+            if(isNaN(year)) return '-';
+            
+            return `${year}/${month}/${day}`;
+        }
+        
+        return String(excelDate);
     };
 
+    // 알림 메시지 띄우기 (alert 대체)
+    const showToast = (message) => {
+        const toast = document.getElementById("toast");
+        toast.innerText = message;
+        toast.className = "show";
+        setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
+    };
+
+    // 로컬 스토리지 데이터 로드 및 초기화
+    const initApp = () => {
+        const savedAssets = localStorage.getItem('smart_assets');
+        if (savedAssets) appState.assets = JSON.parse(savedAssets);
+
+        const savedLoan = localStorage.getItem('smart_loan');
+        if (savedLoan) appState.loan = JSON.parse(savedLoan);
+
+        // Input 폼에 기존 값 세팅
+        document.getElementById('input-cash').value = appState.assets.cash || '';
+        document.getElementById('input-invest').value = appState.assets.invest || '';
+        document.getElementById('input-pension').value = appState.assets.pension || '';
+        
+        document.getElementById('loan-principal').value = appState.loan.principal || '';
+        document.getElementById('loan-rate').value = appState.loan.rate || '';
+        document.getElementById('loan-months').value = appState.loan.months || '';
+        document.getElementById('loan-start').value = appState.loan.startDate || '';
+
+        updateUI();
+    };
+
+    // 대출 저장
+    const saveLoanConfig = () => {
+        const principal = Number(document.getElementById('loan-principal').value) || 0;
+        const rate = Number(document.getElementById('loan-rate').value) || 0;
+        const months = Number(document.getElementById('loan-months').value) || 0;
+        const startDate = document.getElementById('loan-start').value;
+
+        if(!startDate) {
+            showToast("대출 실행 연월을 입력해주세요.");
+            return;
+        }
+
+        appState.loan = { principal, rate, months, startDate };
+        localStorage.setItem('smart_loan', JSON.stringify(appState.loan));
+        showToast("대출 설정이 저장되었습니다.");
+        updateUI();
+    };
+
+    // 자산 저장
+    const saveAssets = () => {
+        appState.assets.cash = Number(document.getElementById('input-cash').value) || 0;
+        appState.assets.invest = Number(document.getElementById('input-invest').value) || 0;
+        appState.assets.pension = Number(document.getElementById('input-pension').value) || 0;
+        
+        localStorage.setItem('smart_assets', JSON.stringify(appState.assets));
+        showToast("자산 현황이 성공적으로 갱신되었습니다.");
+        updateUI();
+    };
+
+    // 현재 대출 잔액 및 월 상환액 자동 계산 (원리금균등 기준)
     const calculateCurrentLoanBalance = () => {
         const { principal, rate, months, startDate } = appState.loan;
         const paymentDisplay = document.getElementById('loan-monthly-payment');
@@ -261,6 +374,7 @@
         let passedMonths = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
         
         if (passedMonths < 0) return principal; // 아직 대출 시작 전
+        
         if (passedMonths >= months) {
             if(paymentDisplay) paymentDisplay.innerHTML = '예상 월 상환액: <span class="text-gray-400">상환 완료</span>';
             return 0;   // 대출 완납
@@ -269,7 +383,7 @@
         // 월 이율
         const monthlyRate = (rate / 100) / 12;
         
-        // 예상 월 상환액 계산 (원리금균등상환액)
+        // 예상 월 상환액 계산
         let monthlyPayment = 0;
         if (monthlyRate === 0) {
             monthlyPayment = principal / months;
@@ -279,8 +393,6 @@
         }
 
         // 원리금균등상환 잔금 계산 공식
-        // 잔금 = 원금 * [ (1+r)^n - (1+r)^p ] / [ (1+r)^n - 1 ]
-        // r: 월이율, n: 총개월수, p: 경과개월수
         let balance = 0;
         if (monthlyRate === 0) {
             balance = principal - (principal / months) * passedMonths;
@@ -297,105 +409,77 @@
             `총 ${months}개월 중 ${passedMonths}개월 경과 (${months - passedMonths}개월 남음)`;
             
         if(paymentDisplay) {
-            paymentDisplay.innerHTML = `예상 월 상환액: <span class="text-indigo-600">${formatCurrency(monthlyPayment)} 원</span>`;
+            paymentDisplay.innerHTML = `예상 월 상환액: <span class="text-red-600 font-bold">${formatCurrency(monthlyPayment)} 원</span>`;
         }
             
         return appState.currentLoanBalance;
     };
 
+    // 전체 UI 업데이트
     const updateUI = () => {
-        // 대출 잔액 계산
-        calculateCurrentLoanBalance();
+        const cash = appState.assets.cash;
+        const invest = appState.assets.invest;
+        const pension = appState.assets.pension;
+        const loanBal = calculateCurrentLoanBalance();
 
-        // 1. 총 자산 계산
-        const totalAssets = appState.assets.savings + appState.assets.stocks + appState.assets.pension;
-        const netWorth = totalAssets - appState.currentLoanBalance;
+        const totalAsset = cash + invest + pension;
+        const netWorth = totalAsset - loanBal;
 
-        // 2. 상단 텍스트 업데이트
-        document.getElementById('net-worth-display').innerHTML = `${formatCurrency(netWorth)} <span class="text-2xl text-gray-600 font-bold">원</span>`;
+        document.getElementById('summary-cash').textContent = formatCurrency(cash) + ' 원';
+        document.getElementById('summary-invest').textContent = formatCurrency(invest) + ' 원';
+        document.getElementById('summary-pension').textContent = formatCurrency(pension) + ' 원';
+        document.getElementById('summary-loan').textContent = formatCurrency(loanBal) + ' 원';
         
-        document.getElementById('summary-savings').textContent = `${formatCurrency(appState.assets.savings)} 원`;
-        document.getElementById('summary-stocks').textContent = `${formatCurrency(appState.assets.stocks)} 원`;
-        document.getElementById('summary-pension').textContent = `${formatCurrency(appState.assets.pension)} 원`;
-        document.getElementById('summary-loan').textContent = `${formatCurrency(appState.currentLoanBalance)} 원`;
+        document.getElementById('total-net-worth').textContent = formatCurrency(netWorth) + ' 원';
 
-        // 3. 폼에 현재 값 세팅
-        document.getElementById('input-savings').value = appState.assets.savings;
-        document.getElementById('input-stocks').value = appState.assets.stocks;
-        document.getElementById('input-pension').value = appState.assets.pension;
-
-        document.getElementById('input-loan-principal').value = appState.loan.principal;
-        document.getElementById('input-loan-rate').value = appState.loan.rate;
-        document.getElementById('input-loan-months').value = appState.loan.months;
-        document.getElementById('input-loan-start').value = appState.loan.startDate;
-
-        // 4. 차트 업데이트
-        renderChart();
+        renderChart(cash, invest, pension);
     };
 
-    const renderChart = () => {
-        const ctx = document.getElementById('assetChart').getContext('2d');
-        
-        const data = [
-            appState.assets.savings,
-            appState.assets.stocks,
-            appState.assets.pension
-        ];
+    // 도넛 차트 렌더링
+    const renderChart = (cash, invest, pension) => {
+        const ctx = document.getElementById('assetChart');
+        if(!ctx) return;
 
-        if (assetChartInstance) {
-            assetChartInstance.data.datasets[0].data = data;
-            assetChartInstance.update();
+        if(appState.chartInstance) {
+            appState.chartInstance.destroy();
+        }
+
+        // 데이터가 아예 없으면 빈 차트로 보이지 않도록 방어 로직
+        if(cash === 0 && invest === 0 && pension === 0) {
+             appState.chartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['데이터 없음'],
+                    datasets: [{ data: [1], backgroundColor: ['#e5e7eb'], borderWidth: 0 }]
+                },
+                options: { plugins: { tooltip: { enabled: false }, legend: { display: false } }, cutout: '70%' }
+            });
             return;
         }
 
-        assetChartInstance = new Chart(ctx, {
+        appState.chartInstance = new Chart(ctx, {
             type: 'doughnut',
             data: {
-                labels: ['예적금/현금', '주식', '퇴직연금'],
+                labels: ['현금/예적금', '투자자산', '퇴직연금'],
                 datasets: [{
-                    data: data,
-                    backgroundColor: [
-                        '#3b82f6', // blue-500
-                        '#ef4444', // red-500
-                        '#22c55e'  // green-500
-                    ],
-                    borderWidth: 0,
-                    hoverOffset: 4
+                    data: [cash, invest, pension],
+                    backgroundColor: ['#22c55e', '#3b82f6', '#a855f7'],
+                    borderWidth: 2,
+                    borderColor: '#ffffff'
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                cutout: '65%',
                 plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: { padding: 20, font: { family: 'Pretendard' } }
-                    }
-                },
-                cutout: '70%'
+                    legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } }
+                }
             }
         });
     };
 
-    const saveAssets = () => {
-        appState.assets.savings = Number(document.getElementById('input-savings').value) || 0;
-        appState.assets.stocks = Number(document.getElementById('input-stocks').value) || 0;
-        appState.assets.pension = Number(document.getElementById('input-pension').value) || 0;
-        
-        updateUI();
-        showToast("월간 자산 내역이 성공적으로 저장되었습니다.");
-    };
-
-    const saveLoan = () => {
-        appState.loan.principal = Number(document.getElementById('input-loan-principal').value) || 0;
-        appState.loan.rate = Number(document.getElementById('input-loan-rate').value) || 0;
-        appState.loan.months = Number(document.getElementById('input-loan-months').value) || 0;
-        appState.loan.startDate = document.getElementById('input-loan-start').value;
-        
-        updateUI();
-        showToast("대출 설정이 저장되고 잔액이 재계산되었습니다.");
-    };
-
+    // 엑셀 업로드 핸들러
     const handleExcelUpload = (event) => {
         const file = event.target.files[0];
         if (!file) return;
@@ -404,89 +488,89 @@
         reader.onload = (e) => {
             try {
                 const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, {type: 'array'});
+                // cellDates 옵션 제거: SheetJS 기본 파싱을 거친 후 raw 데이터를 직접 포맷팅하는 것이 일관성이 높음
+                const workbook = XLSX.read(data, {type: 'array'}); 
                 const firstSheetName = workbook.SheetNames[0];
                 const worksheet = workbook.Sheets[firstSheetName];
                 
-                // 엑셀을 JSON 배열로 변환
-                const jsonData = XLSX.utils.sheet_to_json(worksheet, {raw: false});
+                // raw: true를 주어 엑셀의 원시값(일련번호 등)을 그대로 가져옴
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, {raw: true}); 
                 
                 processExpenses(jsonData);
                 showToast("가계부 파일이 성공적으로 로드되었습니다.");
             } catch (error) {
                 console.error("Excel parse error:", error);
                 showToast("파일 형식이 맞지 않거나 오류가 발생했습니다.");
+            } finally {
+                 // 같은 파일을 다시 업로드할 때 change 이벤트가 발생하도록 input 초기화
+                 event.target.value = ''; 
             }
         };
         reader.readAsArrayBuffer(file);
     };
 
+    // 가계부 데이터 정제
     const processExpenses = (data) => {
         // 데이터 정제 및 유효성 검사 (유연하게 컬럼명 매칭)
         appState.expenses = data.map(row => {
+            
             // 날짜, 분류, 내용, 금액 키를 찾기 (유사 키워드 대응)
             const getVal = (keywords) => {
                 const key = Object.keys(row).find(k => keywords.some(kw => k.includes(kw)));
-                return key ? row[key] : '-';
+                return key ? row[key] : null;
             };
             
             let amountRaw = getVal(['금액', '지출', 'Price', 'Amount']);
             // 숫자 외 문자 제거
-            let amount = Number(String(amountRaw).replace(/[^0-9.-]+/g,"")) || 0;
-
+            let amount = Number(String(amountRaw || 0).replace(/[^0-9.-]+/g,"")) || 0;
+            
+            let rawDate = getVal(['날짜', '일시', 'Date', '일자']);
+            let formattedDate = formatExcelDate(rawDate);
+            
             return {
-                date: getVal(['날짜', '일시', 'Date']),
-                category: getVal(['분류', '카테고리', 'Category']),
-                description: getVal(['내용', '적요', 'Description']),
+                date: formattedDate,
+                category: getVal(['분류', '카테고리', 'Category']) || '-',
+                description: getVal(['내용', '적요', 'Description', '내역']) || '-',
                 amount: amount
             };
         });
 
+        // 날짜순으로 정렬 (최신순)
+        appState.expenses.sort((a, b) => new Date(b.date) - new Date(a.date));
+        
         renderExpenseTable();
     };
 
+    // 테이블 렌더링
     const renderExpenseTable = () => {
         const tbody = document.getElementById('expense-table-body');
-        const totalDisplay = document.getElementById('total-expense-display');
         
-        tbody.innerHTML = '';
-        let totalExpense = 0;
-
         if (appState.expenses.length === 0) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="4" class="px-6 py-10 text-center text-gray-400">
-                        <i class="fas fa-inbox text-3xl mb-2"></i><br>
-                        업로드된 내역이 없습니다.
-                    </td>
-                </tr>
-            `;
-            totalDisplay.textContent = '0 원';
+            tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-10 text-center text-gray-400">데이터가 없습니다.</td></tr>`;
+            document.getElementById('expense-count').textContent = '0 건';
+            document.getElementById('expense-total').textContent = '0 원';
             return;
         }
 
-        appState.expenses.forEach(item => {
-            totalExpense += item.amount;
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${item.date}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
-                        ${item.category}
-                    </span>
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${item.description}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right font-medium">${formatCurrency(item.amount)} 원</td>
+        let totalExpense = 0;
+        tbody.innerHTML = appState.expenses.map(exp => {
+            totalExpense += exp.amount;
+            return `
+                <tr class="hover:bg-gray-50 transition-colors">
+                    <td class="px-4 py-3 border-b text-gray-600 whitespace-nowrap">${exp.date}</td>
+                    <td class="px-4 py-3 border-b text-gray-800"><span class="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs">${exp.category}</span></td>
+                    <td class="px-4 py-3 border-b text-gray-800 truncate max-w-xs">${exp.description}</td>
+                    <td class="px-4 py-3 border-b text-right font-medium text-red-500">${formatCurrency(exp.amount)} 원</td>
+                </tr>
             `;
-            tbody.appendChild(tr);
-        });
+        }).join('');
 
-        totalDisplay.textContent = `${formatCurrency(totalExpense)} 원`;
+        document.getElementById('expense-count').textContent = formatCurrency(appState.expenses.length) + ' 건';
+        document.getElementById('expense-total').textContent = formatCurrency(totalExpense) + ' 원';
     };
 
-    window.onload = () => {
-        updateUI();
-    };
+    // 앱 실행
+    window.onload = initApp;
 
 </script>
 </body>
